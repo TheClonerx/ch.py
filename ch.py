@@ -268,6 +268,7 @@ class _ANON_PM_OBJECT:
         self._rbuf = b""
         self._pingTask = None
         self._name = name
+        self._sock = None
 
     def _auth(self):
         self._sendCommand("mhs", "mini", "unknown", self._name)
@@ -283,6 +284,7 @@ class _ANON_PM_OBJECT:
         self._connected = False
         self._sock.close()
         self._sock = None
+        del self.mgr.pm._persons[self._name]
 
     def ping(self):
         """send a ping"""
@@ -419,7 +421,7 @@ class ANON_PM:
         self._persons[user.name].message(user, msg)
 
     def getConnections(self):
-        return list(self._persons.values())
+        return list(x for x in self._persons.values() if x is not None)
 
 
 ################################################################
@@ -599,7 +601,7 @@ class PM:
 
     def _rcmd_idleupdate(self, args):
         user = User(args[0])
-        last_on, is_on, idle = self._status[user]
+        last_on, is_on, idle = self._status.get(user, (0, True, 0))
         if args[1] == '1':
             self._status[user] = [last_on, is_on, 0]
         else:
@@ -670,7 +672,7 @@ class PM:
     def message(self, user, msg):
         """send a pm to a user"""
         if msg is not None:
-            self._sendCommand("msg", user.name, msg)
+            self._sendCommand("msg", user.name, '<n7/><m v="1">%s</m>' % msg)
 
     def addContact(self, user):
         """add contact"""
