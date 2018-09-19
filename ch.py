@@ -65,6 +65,18 @@ else:
     import urllib.request
     import urllib.parse
 
+try:
+    import html
+except:
+    class html:
+        import functools
+        import cgi
+        from HTMLParser import HTMLParser
+        unescape = functools.partial(HTMLParser.unescape.__func__, HTMLParser)
+        escape = functools.partial(cgi.escape, quote=True)
+        del functools, cgi, HTMLParser  # don't want to polute the namespace
+
+
 ################################################################
 # Constants
 ################################################################
@@ -181,11 +193,7 @@ def _clean_message(msg):
     msg = re.sub("<n.*?/>", "", msg)
     msg = re.sub("<f.*?>", "", msg)
     msg = _strip_html(msg)
-    msg = msg.replace("&lt;", "<")
-    msg = msg.replace("&gt;", ">")
-    msg = msg.replace("&quot;", "\"")
-    msg = msg.replace("&apos;", "'")
-    msg = msg.replace("&amp;", "&")
+    msg = html.unescape(msg)
     return msg, n, f
 
 
@@ -853,7 +861,7 @@ class Room:
             self._currentname = self.mgr.name
         # login as anon
         else:
-            self._sendCommand("bauth", self.name)
+            self._sendCommand("bauth", self.name, "", "", "")
 
         self._setWriteLock(True)
 
@@ -1305,9 +1313,9 @@ class Room:
         if not self._silent:
             self._sendCommand("bmsg:tl2r", msg)
 
-    def message(self, msg, html=False):
+    def message(self, msg, use_html=False):
         """
-        Send a message. (Use "\n" for new line)
+        Send a message. (Use "\n" or "\r" for new line)
 
         @type msg: str
         @param msg: message
@@ -1315,27 +1323,28 @@ class Room:
         if msg is None:
             return
         msg = msg.rstrip()
-        if not html:
-            msg = msg.replace("<", "&lt;").replace(">", "&gt;")
+        if not use_html:
+            msg = html.escape(msg)
         if len(msg) > self.mgr._maxLength:
             if self.mgr._tooBigMessage == BigMessage_Cut:
-                self.message(msg[:self.mgr._maxLength], html=html)
+                self.message(msg[:self.mgr._maxLength], use_html=use_html)
             elif self.mgr._tooBigMessage == BigMessage_Multiple:
                 while len(msg) > 0:
                     sect = msg[:self.mgr._maxLength]
                     msg = msg[self.mgr._maxLength:]
-                    self.message(sect, html=html)
+                    self.message(sect, use_html=use_html)
             return
-        msg = "<n" + self.user.nameColor + "/>" + msg
-        if (self._currentname is not None and
-                not self._currentname.startswith("!anon")):
-            font_properties = "<f x%0.2i%s=\"%s\">" % (
-                self.user.fontSize, self.user.fontColor, self.user.fontFace
-            )
-            if "\n" in msg:
-                msg.replace("\n", "</f></p><p>%s" % font_properties)
-            msg = font_properties + msg
-        msg.replace("~", "&#126;")
+        font_properties = "<f x%0.2i%s=\"%s\">" % (
+            self.user.fontSize, self.user.fontColor, self.user.fontFace
+        )
+        # chatango uses \r as a newline character
+        # using a \n would break the connection
+        msg = msg.replace("\n", "\r")
+        msg = msg.replace("~", "&#126;")
+        msg = font_properties + msg
+        # anons can't use custom name colors
+        if self.mgr._password is not None:
+            msg = "<n" + self.user.nameColor + "/>" + msg
         self.rawMessage(msg)
 
     def setBgMode(self, mode):
@@ -2286,26 +2295,31 @@ class RoomManager:
             conns = self.getConnections()
             socks = [x._sock for x in conns]
             wsocks = [x._sock for x in conns if x._wbuf != b""]
+            if not (socks or wsocks):
+                self._tick()
+                continue
             rd, wr, sp = select.select(
                 socks, wsocks, [], self._TimerResolution
             )
             for sock in rd:
                 con = [c for c in conns if c._sock == sock][0]
                 try:
-                    data = sock.recv(1024)
-                    if(len(data) > 0):
+                    data = sock.recv(8192)
+                    if data:
                         con._feed(data)
                     else:
                         con.disconnect()
                 except socket.error:
-                    pass
+                    if debug:
+                        raise
             for sock in wr:
                 con = [c for c in conns if c._sock == sock][0]
                 try:
                     size = sock.send(con._wbuf)
                     con._wbuf = con._wbuf[size:]
                 except socket.error:
-                    pass
+                    if debug:
+                        raise
             self._tick()
 
     @classmethod
