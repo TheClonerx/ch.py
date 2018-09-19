@@ -98,17 +98,21 @@ specials = {
     'dbzepisodeorg': 10, 'watch-dragonball': 8, 'peliculas-flv': 69,
     'tvanimefreak': 54, 'tvtvanimefreak': 54
 }
-tsweights = {
-    5: 75, 6: 75, 7: 75, 8: 75, 9: 95, 11: 95, 12: 95, 13: 95, 14: 95, 15: 95,
-    16: 75, 17: 75, 18: 75, 19: 110, 23: 110, 24: 110, 25: 110, 26: 110,
-    28: 104, 29: 104, 30: 104, 31: 104, 32: 104, 33: 104, 35: 101, 36: 101,
-    37: 101, 38: 101, 39: 101, 40: 101, 41: 101, 42: 101, 43: 101, 44: 101,
-    45: 101, 46: 101, 47: 101, 48: 101, 49: 101, 50: 101, 52: 110, 53: 110,
-    55: 110, 57: 110, 58: 110, 59: 110, 60: 110, 61: 110, 62: 110, 63: 110,
-    64: 110, 65: 110, 66: 110, 68: 95, 71: 116, 72: 116, 73: 116, 74: 116, 75:
-    116, 76: 116, 77: 116, 78: 116, 79: 116, 80: 116, 81: 116, 82: 116,
-    83: 116, 84: 116
-}
+
+# order matters
+tsweights = [
+    (5, 75), (6, 75), (7, 75), (8, 75), (16, 75), (17, 75), (18, 75),
+    (9, 95), (11, 95), (12, 95), (13, 95), (14, 95), (15, 95), (19, 110),
+    (23, 110), (24, 110), (25, 110), (26, 110), (28, 104), (29, 104),
+    (30, 104), (31, 104), (32, 104), (33, 104), (35, 101), (36, 101),
+    (37, 101), (38, 101), (39, 101), (40, 101), (41, 101), (42, 101),
+    (43, 101), (44, 101), (45, 101), (46, 101), (47, 101), (48, 101),
+    (49, 101), (50, 101), (52, 110), (53, 110), (55, 110), (57, 110),
+    (58, 110), (59, 110), (60, 110), (61, 110), (62, 110), (63, 110),
+    (64, 110), (65, 110), (66, 110), (68, 95), (71, 116), (72, 116),
+    (73, 116), (74, 116), (75, 116), (76, 116), (77, 116), (78, 116),
+    (79, 116), (80, 116), (81, 116), (82, 116), (83, 116), (84, 116)
+]
 
 
 def getServer(group):
@@ -126,21 +130,21 @@ def getServer(group):
     except KeyError:
         group = group.replace("_", "q")
         group = group.replace("-", "q")
-        fnv = float(int(group[0:min(5, len(group))], 36))
-        lnv = group[6: (6 + min(3, len(group) - 5))]
-        if(lnv):
+        fnv = float(int(group[:5], 36))
+        lnv = group[6:9]
+        if lnv:
             lnv = float(int(lnv, 36))
             lnv = max(lnv, 1000)
         else:
             lnv = 1000
         num = (fnv % lnv) / lnv
-        maxnum = sum(tsweights.values())
+        maxnum = sum(y for x, y in tsweights)
         cumfreq = 0
         sn = 0
-        for k, v in tsweights.values():
-            cumfreq += float(v) / maxnum
-            if(num <= cumfreq):
-                sn = k
+        for x, y in tsweights:
+            cumfreq += float(y) / maxnum
+            if num <= cumfreq:
+                sn = x
                 break
     return "s" + str(sn) + ".chatango.com"
 
@@ -231,12 +235,12 @@ def _getAnonId(n, ssid):
     if n is None:
         n = "5504"
     try:
-        return "".join(list(
-            map(lambda x: str(x[0] + x[1])[-1], list(zip(
-                list(map(lambda x: int(x), n)),
-                list(map(lambda x: int(x), ssid[4:]))
-            )))
-        ))
+        return "".join(
+            str(x + y)[-1] for x, y in zip(
+                (int(x) for x in n),
+                (int(x) for x in ssid[4:])
+            )
+        )
     except ValueError:
         return "NNNN"
 
@@ -293,7 +297,7 @@ class _ANON_PM_OBJECT:
         @param data: data to be fed
         """
         self._rbuf += data
-        while self._rbuf.find(b"\x00") != -1:
+        while b"\0" in self._rbuf:
             data = self._rbuf.split(b"\x00")
             for food in data[:-1]:
                 self._process(food.decode(errors="replace").rstrip("\r\n"))
@@ -312,9 +316,8 @@ class _ANON_PM_OBJECT:
         func = "_rcmd_" + cmd
         if hasattr(self, func):
             getattr(self, func)(args)
-        else:
-            if debug:
-                print("unknown data: "+str(data))
+        elif debug:
+                print("unknown data: " + str(data))
 
     def _getManager(self): return self._mgr
 
@@ -517,7 +520,7 @@ class PM:
         @param data: data to be fed
         """
         self._rbuf += data
-        while self._rbuf.find(b"\x00") != -1:
+        while b"\0" in self._rbuf:
             data = self._rbuf.split(b"\x00")
             for food in data[:-1]:
                 self._process(food.decode(errors="replace").rstrip("\r\n"))
@@ -536,9 +539,8 @@ class PM:
         func = "_rcmd_" + cmd
         if hasattr(self, func):
             getattr(self, func)(args)
-        else:
-            if debug:
-                print("unknown data: "+str(data))
+        elif debug:
+                print("unknown data: " + str(data))
 
     ####
     # Properties
@@ -952,7 +954,7 @@ class Room:
         @param data: data to be fed
         """
         self._rbuf += data
-        while self._rbuf.find(b"\x00") != -1:
+        while b"\0" in self._rbuf:
             data = self._rbuf.split(b"\x00")
             for food in data[:-1]:
                 self._process(food.decode(errors="replace").rstrip("\r\n"))
@@ -972,7 +974,7 @@ class Room:
         if hasattr(self, func):
             getattr(self, func)(args)
         elif debug:
-                print("unknown data: "+str(data))
+                print("unknown data: " + str(data))
 
     ####
     # Received Commands
@@ -1767,8 +1769,8 @@ class RoomManager:
             try:
                 print(text)
                 break
-            except UnicodeEncodeError as ex:
-                text = (text[0:ex.start]+'(unicode)'+text[ex.end:])
+            except UnicodeError as ex:
+                text = text[0:ex.start] + '(unicode)' + text[ex.end:]
 
     def onConnect(self, room):
         """
