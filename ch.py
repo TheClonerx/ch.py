@@ -1315,9 +1315,10 @@ class Room:
         if not self._silent:
             self._sendCommand("bmsg:tl2r", msg)
 
-    def message(self, msg, use_html=False):
+    def message(self, msg, **kwargs):
         """
-        Send a message. (Use "\n" or "\r" for new line)
+        message(msg, html=False)
+        Send a message. (Use "\\n" or "\\r" for new line)
 
         @type msg: str
         @param msg: message
@@ -1325,7 +1326,7 @@ class Room:
         if msg is None:
             return
         msg = msg.rstrip()
-        if not use_html:
+        if not kwargs.get("html"):
             msg = html.escape(msg)
         if len(msg) > self.mgr._maxLength:
             if self.mgr._tooBigMessage == BigMessage_Cut:
