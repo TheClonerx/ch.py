@@ -1,4 +1,4 @@
-import urllib.request
+import sys
 import zlib
 import json
 import re
@@ -6,10 +6,17 @@ import io
 import pprint
 
 
+if sys.version_info[0] < 3:
+    class urllib:
+        request = __import__("urllib2")
+else:
+    import urllib.request
+
+
 class Updater:
     def findid(self):
         url = urllib.request.urlopen("http://st.chatango.com/cfg/nc/r.json")
-        if url.getheader("Content-Encoding") == "gzip":
+        if url.headers.get("Content-Encoding") == "gzip":
             print("Server weights encoded with gzip, decoding...")
             data = zlib.decompress(url.read(), 47)
         else:
@@ -23,7 +30,7 @@ class Updater:
             "http://st.chatango.com/h5/gz/r%s/id.html" % self.ID
         )
         print("Found server weights.")
-        if url.getheader('Content-Encoding') == "gzip":
+        if url.headers.get('Content-Encoding') == "gzip":
             print("Server weights encoded with gzip, decoding...")
             data = zlib.decompress(url.read(), 47)
         else:
@@ -41,14 +48,20 @@ class Updater:
         print("Writing server weights to ch.py...")
         with open("ch.py", "r+") as ch:
             rdata = ch.read()
-            formated = io.StringIO()
-            pprint.pprint(self.weights, formated, 4, 79, None, compact=True)
+            if sys.version_info[0] == 3:
+                formated = io.StringIO()
+                kwargs = {"compact": True}
+            else:
+                kwargs = {}
+                formated = io.BytesIO()
+            pprint.pprint(self.weights, formated, 4, 79, None, **kwargs)
             formated.seek(0)
             formated = formated.read()
             formated = formated.replace("[   ", "[\n    ")
             formated = formated.replace("]", "\n]")
+            formated = "tsweights = %s\n\n" % formated
             wdata = re.sub(
-                r"tsweights = \[.*?\]\s*", "tsweights = %s\n\n" % formated,
+                r"tsweights = \[.*?\]\s*", formated,
                 rdata,
                 flags=re.M | re.S
             )
