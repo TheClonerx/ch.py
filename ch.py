@@ -1330,12 +1330,12 @@ class Room:
             msg = html.escape(msg)
         if len(msg) > self.mgr._maxLength:
             if self.mgr._tooBigMessage == BigMessage_Cut:
-                self.message(msg[:self.mgr._maxLength], use_html=use_html)
+                self.message(msg[:self.mgr._maxLength], **kwargs)
             elif self.mgr._tooBigMessage == BigMessage_Multiple:
                 while len(msg) > 0:
                     sect = msg[:self.mgr._maxLength]
                     msg = msg[self.mgr._maxLength:]
-                    self.message(sect, use_html=use_html)
+                    self.message(sect, **kwargs)
             return
         font_properties = "<f x%0.2i%s=\"%s\">" % (
             self.user.fontSize, self.user.fontColor, self.user.fontFace
