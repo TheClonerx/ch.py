@@ -44,7 +44,11 @@ import random
 import re
 import sys
 import select
-import _ws
+try:
+    import _ws
+except BaseException as e:
+    _ws = None
+    _ws_exc_info = sys.exc_info()
 
 ################################################################
 # Debug stuff
@@ -89,6 +93,16 @@ BigMessage_Cut = 1
 
 # minimum of 1 thread needed
 Number_of_Threads = 1
+Use_WebSocket = True
+
+if Use_WebSocket and _ws is None:
+    sys.stderr.write(
+        "Use_WebSocket is set to True, "
+        "but couldn't import _ws.\n\n"
+    )
+    import traceback
+    traceback.print_exception(*_ws_exc_info, file=sys.stderr)
+    exit(1)
 
 
 ################################################################
@@ -768,6 +782,8 @@ class PM:
 ################################################################
 class Room:
     """Manages a connection with a Chatango room."""
+    _default_port = 8080 if Use_WebSocket else 443
+
     ####
     # Init
     ####
@@ -776,7 +792,7 @@ class Room:
         # Basic stuff
         self._name = room
         self._server = server or getServer(room)
-        self._port = port or 8080
+        self._port = port or self.__class__._default_port
         self._mgr = mgr
 
         # Under the hood
@@ -819,22 +835,24 @@ class Room:
         self._sock.connect((self._server, self._port))
         self._sock.setblocking(False)
         self._firstCommand = True
-        self._wbuf = b""
-        # self._auth()
         self._pingTask = self.mgr.setInterval(self.mgr._pingDelay, self.ping)
         if not self._reconnecting:
             self.connected = True
         self._headers_parsed = False
-        self._wbuf = (
-            b"GET / HTTP/1.1\r\n" +
-            "Host: {}:{}\r\n".format(self._server, self._port).encode() +
-            b"Origin: http://st.chatango.com\r\n"
-            b"Connection: Upgrade\r\n"
-            b"Upgrade: websocket\r\n"
-            b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-            b"Sec-WebSocket-Version: 13\r\n"
-            b"\r\n"
-        )
+        if Use_WebSocket:
+            self._wbuf = (
+                b"GET / HTTP/1.1\r\n" +
+                "Host: {}:{}\r\n".format(self._server, self._port).encode() +
+                b"Origin: http://st.chatango.com\r\n"
+                b"Connection: Upgrade\r\n"
+                b"Upgrade: websocket\r\n"
+                b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                b"Sec-WebSocket-Version: 13\r\n"
+                b"\r\n"
+            )
+        else:
+            self._wbuf = b""
+            self._auth()
 
     def reconnect(self):
         """Reconnect."""
@@ -977,33 +995,40 @@ class Room:
         @param data: data to be fed
         """
         self._rbuf += data
-        if not self._headers_parsed and b"\r\n\r\n" in self._rbuf:
-            headers, _, self._rbuf = self._rbuf.partition(b"\r\n\r\n")
-            key = _ws.check_headers(headers)
-            if key != "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=":
-                self._disconnect()
-                self._callEvent("onConnectFail")
-            else:
-                self._auth()
-                self._connected = True
-            self._headers_parsed = True
-        else:
-            r = _ws.check_frame(self._rbuf)
-            while r:
-                frame = self._rbuf[:r]
-                self._rbuf = self._rbuf[r:]
-                info = _ws.frame_info(frame)
-                payload = _ws.get_payload(frame)
-                if info.opcode == _ws.CLOSE:
+        if Use_WebSocket:
+            if not self._headers_parsed and b"\r\n\r\n" in self._rbuf:
+                headers, self._rbuf = self._rbuf.split(b"\r\n\r\n", 1)
+                key = _ws.check_headers(headers)
+                if key != "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=":
                     self._disconnect()
-                elif info.opcode == _ws.TEXT:
-                    self._process(payload)
-                elif debug:
-                    print(
-                        "unhandled frame: " + repr(info) +
-                        " with payload " + repr(payload)
-                    )
+                    self._callEvent("onConnectFail")
+                else:
+                    self._auth()
+                    self._connected = True
+                self._headers_parsed = True
+            else:
                 r = _ws.check_frame(self._rbuf)
+                while r:
+                    frame = self._rbuf[:r]
+                    self._rbuf = self._rbuf[r:]
+                    info = _ws.frame_info(frame)
+                    payload = _ws.get_payload(frame)
+                    if info.opcode == _ws.CLOSE:
+                        self._disconnect()
+                    elif info.opcode == _ws.TEXT:
+                        self._process(payload)
+                    elif debug:
+                        print(
+                            "unhandled frame: " + repr(info) +
+                            " with payload " + repr(payload)
+                        )
+                    r = _ws.check_frame(self._rbuf)
+        else:
+            while b"\0" in self._rbuf:
+                data = self._rbuf.split(b"\x00")
+                for food in data[:-1]:
+                    self._process(food.decode(errors="replace").rstrip("\r\n"))
+                self._rbuf = data[-1]
 
     def _process(self, data):
         """
@@ -1616,8 +1641,11 @@ class Room:
         else:
             terminator = "\r\n\0"
         payload = ":".join(args) + terminator
-        frame = _ws.encode_frame(mask=True, payload=payload)
-        self._write(frame)
+        if Use_WebSocket:
+            frame = _ws.encode_frame(mask=True, payload=payload)
+            self._write(frame)
+        else:
+            self._write(payload.encode())
 
     def getLevel(self, user):
         """get the level of user in a room"""
