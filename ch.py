@@ -97,12 +97,12 @@ Number_of_Threads = 1
 Use_WebSocket = True
 
 Channels = {
-    "white": 0,
+    "none": 0,
     "red": 256,
     "blue": 2048,
     "shield": 64,
     "staff": 128,
-    "mod": 32780
+    "mod": 32768
 }
 
 if Use_WebSocket and _ws is None:
@@ -113,6 +113,9 @@ if Use_WebSocket and _ws is None:
     import traceback
     traceback.print_exception(*_ws_exc_info, file=sys.stderr)
     exit(1)
+
+if _ws is None:
+    del _ws, _ws_exc_info
 
 
 ################################################################
