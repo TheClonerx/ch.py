@@ -1134,6 +1134,8 @@ class Room:
         puid = args[3]
         ip = args[6]
         name = args[1]
+        channels = int(args[7])
+        channels = tuple(x for x, y in Channels.items() if channels & y)
         rawmsg = ":".join(args[9:])
         msg, n, f = _clean_message(rawmsg)
         if name == "":
@@ -1166,6 +1168,7 @@ class Room:
             fontSize=fontSize,
             unid=unid,
             puid=puid,
+            channels=channels,
             room=self
         )
         self._mqueue[i] = msg
@@ -2668,6 +2671,7 @@ class Message:
         self._fontSize = 12
         self._fontFace = "0"
         self._fontColor = "000"
+        self._channels = ()
         for attr, val in kw.items():
             if val is None:
                 continue
@@ -2702,6 +2706,8 @@ class Message:
 
     def _getPuid(self): return self._puid
 
+    def _getChannels(self): return self._channels
+
     msgid = property(_getId)
     time = property(_getTime)
     user = property(_getUser)
@@ -2716,3 +2722,4 @@ class Message:
     unid = property(_getUnid)
     puid = property(_getPuid)
     uid = property(_getPuid)  # other library use uid so we create an alias
+    channels = property(_getChannels)
