@@ -1387,17 +1387,27 @@ class Room:
 
     def message(self, msg, **kwargs):
         """
-        message(msg, html=False)
+        message(msg, html=False, channels=None)
         Send a message. (Use "\\n" or "\\r" for new line)
 
         @type msg: str
         @param msg: message
+        @type html: bool
+        @param html: escape html characters
+        @type channels: tuple
+        @param channels: channels of the message
         """
         if msg is None:
             return
         msg = msg.rstrip()
         if not kwargs.get("html"):
             msg = html.escape(msg)
+        channels = kwargs.get("channels")
+        channels_flags = 0
+        if channels:
+            for v in channels:
+                if v.lower() in Channels:
+                    channels_flags |= Channels[v.lower()]
         if len(msg) > self.mgr._maxLength:
             if self.mgr._tooBigMessage == BigMessage_Cut:
                 self.message(msg[:self.mgr._maxLength], **kwargs)
@@ -1418,7 +1428,10 @@ class Room:
         # anons can't use custom name colors
         if self.mgr._password is not None:
             msg = "<n" + self.user.nameColor + "/>" + msg
-        self.rawMessage(msg)
+        if channels_flags:
+            self._sendCommand("bm", "ibrs", str(channels_flags), msg)
+        else:
+            self.rawMessage(msg)
 
     def setBgMode(self, mode):
         """turn on/off bg"""
